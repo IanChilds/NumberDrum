@@ -2,6 +2,7 @@ package binnie.apps;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.AdapterView;
@@ -17,6 +18,7 @@ public class MainMenu extends Activity implements AdapterView.OnItemClickListene
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.main);
+        setStats();
 
         ArrayList<String> optionList = new ArrayList<String>();
         optionList.add("New Game");
@@ -38,5 +40,29 @@ public class MainMenu extends Activity implements AdapterView.OnItemClickListene
             newGame.putExtra(IS_NEW_GAME, true);
             startActivity(newGame);
         }
+        if (i == 3) {
+            Intent statistics = new Intent(this, Statistics.class);
+            startActivity(statistics);
+        }
     }
+
+    private void setStats () {
+        SharedPreferences savedStats = getPreferences(MODE_PRIVATE);
+        StatsStore.setSuccessesEver(savedStats.getInt("allSuccessesEver", 0));
+        StatsStore.setFailuresEver(savedStats.getInt("failuresEver", 0));
+    }
+
+    private void saveStats() {
+        SharedPreferences saveStats = getPreferences(MODE_PRIVATE);
+        SharedPreferences.Editor editor = saveStats.edit();
+        editor.putInt("allSuccessesEver", StatsStore.getSuccessesEver());
+        editor.putInt("failuresEver", StatsStore.getFailuresEver());
+        editor.commit();
+    }
+
+    public void onStop() {
+        super.onStop();
+        saveStats();
+    }
+
 }

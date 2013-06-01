@@ -21,15 +21,16 @@ import java.util.*;
 public class NumberDrum extends Activity {
     private int[] nums = new int[6];
     private int targetNum;
+    private String[] currentAnswer = new String[30];
+    private int currentAnswerLength;
     private int differenceInBrackets = 0;
-    public static final int OPERATOR = 1;
-    public static final int NUMBER = 2;
-    public static final int LEFT_BRACKET = 3;
-    public static final int RIGHT_BRACKET = 4;
+    public static final int OPERATOR = 1, NUMBER = 2, LEFT_BRACKET = 3, RIGHT_BRACKET = 4;
+    public static final int MULTIPLY = 3, DIVIDE = 4, ADD = 1, SUBTRACT = 2;
     private int lastChar = OPERATOR;
     private int numbersUsed = 0;
-    private String[] solution;
+    private int numHintsUsed = 0;
     private Button[] numberButtons = new Button[6];
+    private List<Integer> buttonsOrder = new ArrayList<Integer>(6);
     private Button targetButton;
     private TextView equationTextView;
     private String[] equation = new String[30];
@@ -42,9 +43,8 @@ public class NumberDrum extends Activity {
 
         Intent intent = getIntent();
         if (intent.getBooleanExtra(MainMenu.IS_NEW_GAME, true)) {
-            solution = generateNewGame();
+            generateNewGame();
         }
-
         setUpGame();
     }
 
@@ -57,12 +57,14 @@ public class NumberDrum extends Activity {
         numberButtons[4] = (Button) findViewById(R.id.num5);
         numberButtons[5] = (Button) findViewById(R.id.num6);
 
+        buttonsOrder.clear();
+        for (int ii = 0; ii < 6; ii++) buttonsOrder.add(ii);
+        Collections.shuffle(buttonsOrder);
+
         for (int ii = 0; ii < 6; ii++) {
-            numberButtons[ii].setText(solution[ii * 2]);
+            numberButtons[buttonsOrder.get(ii)].setText(Integer.toString(nums[ii]));
             numberButtons[ii].setWidth(60);
-            nums[ii] = Integer.parseInt(solution[ii * 2]);
         }
-        targetNum = Integer.parseInt(solution[11]);
         targetButton = (Button) findViewById(R.id.target_num);
         targetButton.setText(Integer.toString(targetNum));
         targetButton.setWidth(90);
@@ -101,8 +103,6 @@ public class NumberDrum extends Activity {
         }
     }
 
-    // Should maybe only allow a number of these equal to the total number of numbers remaining. But doesn't matter too
-    // much.
     public void leftBracketPressed (View view) {
         if (((lastChar == OPERATOR) || (lastChar == LEFT_BRACKET)) &&
             (differenceInBrackets <= (6-(numbersUsed + 2)))) {
@@ -132,9 +132,11 @@ public class NumberDrum extends Activity {
         // Otherwise just show a message dialog, and then go back to the same screen.
         if ((evalEquation(equation, equationIndex)) == targetNum) {
             targetButton.setText("Success");
+            StatsStore.updateStats(true, SystemClock.elapsedRealtime() - timer.getBase());
         }
         else {
             targetButton.setText(Integer.toString(targetNum));
+            StatsStore.updateStats(false, SystemClock.elapsedRealtime() - timer.getBase());
             resetGame(findViewById(R.id.reset));
         }
     }
@@ -149,7 +151,8 @@ public class NumberDrum extends Activity {
         // towards any stats that are being counted.
         // Don't need this function at the moment to get a prototype going.
         resetGame(findViewById(R.id.reset));
-        solution = generateNewGame();
+        generateNewGame();
+        numHintsUsed = 0;
         timer.stop();
         timer.setBase(SystemClock.elapsedRealtime());
         setUpGame();
@@ -157,6 +160,8 @@ public class NumberDrum extends Activity {
 
     public void resetGame (View view) {
         equationTextView.setText("");
+        Button hintButton = (Button) findViewById(R.id.hint);
+        hintButton.setText("Hint");
         for (int ii = 0; ii < equation.length; ii++) equation[ii] = "";
         equationIndex = 0;
         numbersUsed = 0;
@@ -168,30 +173,157 @@ public class NumberDrum extends Activity {
     }
 
     public void giveHint (View view) {
-        TextView textView = (TextView)view;
-        textView.setText(Integer.toString(evalEquation(equation, equationIndex)));
+        resetGame(findViewById(R.id.reset));
+        if (numHintsUsed < 4) {
+            timer.setBase(timer.getBase() - 30000 * (long)Math.pow(2, numHintsUsed));
+            numHintsUsed++;
+        }
+        int numsRemainingToGive = numHintsUsed + 1;
+        equationIndex = 0;
+        differenceInBrackets = 0;
+        numbersUsed = 0;
+        while (numsRemainingToGive > 0) {
+            equation[equationIndex] = currentAnswer[equationIndex];
+            if (isInt(equation[equationIndex])) {
+                numberButtons[buttonsOrder.get(numbersUsed)].setEnabled(false);
+                numbersUsed++;
+                numsRemainingToGive--;
+            }
+            if (equation[equationIndex].equals("(")) differenceInBrackets++;
+            if (equation[equationIndex].equals(")")) differenceInBrackets--;
+            equationIndex++;
+        }
+
+        while (currentAnswer[equationIndex].equals(")")) {
+            equation[equationIndex] = currentAnswer[equationIndex];
+            equationIndex++;
+            differenceInBrackets--;
+        }
+
+        if (equation[equationIndex-1].equals(")")) lastChar = RIGHT_BRACKET;
+        else lastChar = NUMBER;
+
+        String textString = "";
+        for (int ii = 0; ii < equationIndex; ii++) textString += equation[ii];
+        equationTextView.setText(textString);
+
     }
 
-    private String[] generateNewGame() {
-        String[] returnString = new String[17];
+    static boolean isInt(String s) {
+        try
+        { int i = Integer.parseInt(s); return true; }
+
+        catch(NumberFormatException er)
+        { return false; }
+    }
+
+    private void generateNewGame() {
+        List<String> returnList = new ArrayList<String>();
+        int[] ops = new int[5];
+        int[] bracketPositions;
         Random random = new Random();
         int equationValue;
         do {
-            for (int ii = 0; ii < 6; ii++) returnString[2*ii] = Integer.toString(random.nextInt(10)+1);
+            returnList.clear();
+            for (int ii = 0; ii < 6; ii++) {
+                nums[ii] = random.nextInt(10)+1;
+                returnList.add(Integer.toString(nums[ii]));
+                if (ii < 5) {
+                    int rand = random.nextInt(3);
+                    returnList.add(getOpFromInt(rand));
+                    ops[ii] = rand + 1;
+                }
+            }
             //for (int ii = 4; ii < 6; ii++) returnString[2*ii] = Integer.toString((random.nextInt(4)+1)*25);
-            for (int ii = 0; ii < 5; ii++) returnString[2*ii+1] = getOpFromInt(random.nextInt(4));
-            equationValue = evalEquation(returnString, 11);
+            List<Integer> list = new ArrayList<Integer>();
+            for (int ii = 0; ii < 5; ii++) list.add(ii);
+            Collections.shuffle(list);
+
+            bracketPositions = generateBracketPositions(ops, list);
+            int currPos = 0;
+            for (int ii = 0; ii < 6; ii++) {
+                if (ii < 5) {
+                    for (int jj = 0; jj < bracketPositions[ii]; jj++) {
+                        returnList.add(currPos, "(");
+                        currPos++;
+                    }
+                }
+                currPos++;
+                if (ii > 0) {
+                    for (int jj = 0; jj < bracketPositions[ii + 4]; jj++) {
+                        returnList.add(currPos, ")");
+                        currPos++;
+                    }
+                }
+                currPos++;
+            }
+
+            currentAnswerLength = returnList.size();
+            for (int ii = 0; ii < currentAnswerLength; ii++) currentAnswer[ii] = returnList.get(ii);
+            equationValue = evalEquation(currentAnswer, returnList.size());
         } while ((equationValue > 1000) || (equationValue <= 0));
-        returnString[11] = Integer.toString(equationValue);
+        targetNum = equationValue;
+    }
+
+    private int[] generateBracketPositions(int[] ops, List<Integer> order) {
+        int[] returnString = new int[]{0,0,0,0,0,0,0,0,0,0};
+        boolean[] opUsed = new boolean[]{false, false, false, false, false};
+        int opPosition;
+        int currOp;
+        int prevOp = 0;
+        int nextOp = 0;
+        boolean incBrackets;
+        int startBracketPos;
+        int endBracketPos;
+        for (int ii = 0; ii < 5; ii++) {
+            opPosition = order.get(ii);
+            startBracketPos = opPosition;
+            while ((startBracketPos > 0) && (opUsed[startBracketPos - 1])) startBracketPos--;
+            endBracketPos = opPosition;
+            while ((endBracketPos < 4) && (opUsed[endBracketPos + 1])) endBracketPos++;
+            currOp = ops[opPosition];
+            if (startBracketPos > 0) prevOp = ops[startBracketPos - 1];
+            if (endBracketPos < 4) nextOp = ops[endBracketPos + 1];
+            incBrackets = false;
+            if ((startBracketPos != 0) || (endBracketPos != 4)) {
+                switch (currOp) {
+                    case ADD:
+                        if (((startBracketPos != 0) && (prevOp != ADD)) ||
+                                ((endBracketPos != 4) && (nextOp != ADD) && (nextOp != SUBTRACT))) incBrackets = true;
+                        break;
+
+                    case SUBTRACT:
+                        if (((startBracketPos != 0) && (prevOp != ADD)) ||
+                                ((endBracketPos != 4) && (nextOp != ADD) && (nextOp != SUBTRACT))) incBrackets = true;
+                        break;
+
+                    case MULTIPLY:
+                        if ((startBracketPos != 0) && (prevOp == DIVIDE)) incBrackets = true;
+                        break;
+
+                    case DIVIDE:
+                        if ((startBracketPos != 0) && ((prevOp == MULTIPLY) || (prevOp == DIVIDE))) incBrackets = true;
+                        break;
+
+                    default:
+                        break;
+
+                }
+                if (incBrackets) {
+                    returnString[startBracketPos]++;
+                    returnString[endBracketPos + 5]++;
+                }
+            }
+            opUsed[opPosition] = true;
+        }
         return returnString;
-        //return (new String[]{"1", "+", "2", "+", "3", "+", "4", "+", "5", "+", "6", "21"});
     }
 
     private String getOpFromInt(int number) {
-        if (number == 0) return "*";
+        if (number == 0) return "+";
     //    if (number == 1) return "/";
-        if (number == 2) return "-";
-        else return "+";
+        if (number == 1) return "-";
+        else return "*";
     }
 
     // If any intermediate expressions are not positive integers, then return -1

@@ -13,5 +13,7 @@
             </intent-filter>
         </activity>
         <activity android:name=".NumberDrum"/>
+        <activity android:name=".Instructions"/>
+        <activity android:name=".Statistics"/>
     </application>
 </manifest>
