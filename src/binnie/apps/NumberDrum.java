@@ -132,7 +132,7 @@ public class NumberDrum extends Activity {
         // Otherwise just show a message dialog, and then go back to the same screen.
         if ((evalEquation(equation, equationIndex)) == targetNum) {
             targetButton.setText("Success");
-            StatsStore.updateStats(true, SystemClock.elapsedRealtime() - timer.getBase());
+            StatsStore.updateStats(true, (SystemClock.elapsedRealtime() - timer.getBase()));
         }
         else {
             targetButton.setText(Integer.toString(targetNum));
@@ -221,20 +221,35 @@ public class NumberDrum extends Activity {
         List<String> returnList = new ArrayList<String>();
         int[] ops = new int[5];
         int[] bracketPositions;
+        boolean[] largePositions = new boolean[6];
+        int numLarges;
+        int counter;
+        int randomInt;
         Random random = new Random();
         int equationValue;
         do {
             returnList.clear();
+            numLarges = random.nextInt(3) + 1;
+            for (int ii = 0; ii < 6; ii++) largePositions[ii] = false;
+            counter = 0;
+            while (counter < numLarges) {
+                randomInt = random.nextInt(6);
+                if (!largePositions[randomInt]) {
+                    largePositions[randomInt] = true;
+                    counter++;
+                }
+            }
             for (int ii = 0; ii < 6; ii++) {
-                nums[ii] = random.nextInt(10)+1;
+                if (largePositions[ii]) nums[ii] = (random.nextInt(4) + 1) * 25;
+                else nums[ii] = random.nextInt(10)+1;
                 returnList.add(Integer.toString(nums[ii]));
                 if (ii < 5) {
-                    int rand = random.nextInt(3);
+                    int rand = random.nextInt(4);
                     returnList.add(getOpFromInt(rand));
                     ops[ii] = rand + 1;
                 }
             }
-            //for (int ii = 4; ii < 6; ii++) returnString[2*ii] = Integer.toString((random.nextInt(4)+1)*25);
+
             List<Integer> list = new ArrayList<Integer>();
             for (int ii = 0; ii < 5; ii++) list.add(ii);
             Collections.shuffle(list);
@@ -261,7 +276,7 @@ public class NumberDrum extends Activity {
             currentAnswerLength = returnList.size();
             for (int ii = 0; ii < currentAnswerLength; ii++) currentAnswer[ii] = returnList.get(ii);
             equationValue = evalEquation(currentAnswer, returnList.size());
-        } while ((equationValue > 1000) || (equationValue <= 0));
+        } while ((equationValue > 1000) || (equationValue < 100));
         targetNum = equationValue;
     }
 
@@ -321,8 +336,8 @@ public class NumberDrum extends Activity {
 
     private String getOpFromInt(int number) {
         if (number == 0) return "+";
-    //    if (number == 1) return "/";
         if (number == 1) return "-";
+        if (number == 2) return "/";
         else return "*";
     }
 
